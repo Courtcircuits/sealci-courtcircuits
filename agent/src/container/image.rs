@@ -14,6 +14,7 @@ use tonic::Request;
 use tracing::info;
 const NAMESPACE: &str = "default";
 
+#[derive(Clone)]
 pub struct Image {
     name: String,
     client: ClientContainer,

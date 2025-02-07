@@ -8,7 +8,7 @@ use containerd_client::services::v1::images_client::ImagesClient;
 use containerd_client::services::v1::transfer_client::TransferClient;
 use tonic::transport::Channel;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientContainer {
     pub raw: TransferClient<Channel>,
     pub containers: ContainersClient<Channel>,
