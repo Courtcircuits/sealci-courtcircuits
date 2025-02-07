@@ -11,7 +11,7 @@ use tracing::info;
 use url::Url;
 
 use crate::{
-    container::{
+    container::old::{
         create_exec, inspect_exec, launch_container, remove_container, start_exec, stop_container,
     },
     proto::{ActionResponseStream, ActionResult},
@@ -24,15 +24,6 @@ pub async fn launch_action(
     action_id: Arc<Mutex<u32>>,
     repo_url: String,
 ) -> Result<(), Status> {
-    let _ = log_input.lock().unwrap().send(Ok(ActionResponseStream {
-        log: "Launching action".to_string(),
-        action_id: *action_id.lock().unwrap(),
-        result: Some(ActionResult {
-            completion: 1,
-            exit_code: None,
-        }),
-    }));
-
     let container_id: String = match launch_container(&image_name).await {
         Ok(id) => id,
         Err(e) => return Err(Status::aborted(format!("Launching error: {}", e))),

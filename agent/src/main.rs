@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use tonic::transport::Server;
 use tracing::info;
 mod action;
+pub mod client_container;
 mod container;
 mod health_service;
 mod registering_service;
