@@ -5,8 +5,10 @@ use containerd_client::{
     },
     with_namespace,
 };
-use image::{Image, Pull};
-use std::error::Error;
+use image::{Image, Pull, Unpack};
+use log::info;
+use prost_types::Any;
+use std::{error::Error, path::PathBuf};
 use tonic::Request;
 pub mod image;
 pub mod old;
@@ -17,66 +19,71 @@ pub struct Container {
     client: ClientContainer,
     image: Image,
     id: String,
+    rootfs: PathBuf,
 }
 
-pub trait Manager {
-    async fn launch(&self) -> Result<(), Box<dyn Error>>;
-    async fn stop(&self) -> Result<(), Box<dyn Error>>;
+pub trait Manager: Send + Sync {
+    async fn create(&self) -> Result<(), Box<dyn Error>>;
     async fn remove(self) -> Result<(), Box<dyn Error>>;
     async fn exec(&self) -> Result<(), Box<dyn Error>>;
 }
 
 pub trait Builder {
-    async fn build(
-        image_name: String,
-        client: ClientContainer,
-    ) -> Result<Container, Box<dyn Error>>;
+    async fn build(image: Image) -> Result<Container, Box<dyn Error>>;
 }
 
 impl Builder for Container {
-    async fn build(
-        image_name: String,
-        client: ClientContainer,
-    ) -> Result<Container, Box<dyn Error>> {
-        let image = Image::new(image_name, client.clone());
+    async fn build(image: Image) -> Result<Container, Box<dyn Error>> {
         image.clone().pull().await?;
+        // Define the directory where the image will be unpacked
+        let unpack_dir = PathBuf::from(format!("/tmp/containerd/unpacked/{}", image.name));
+        std::fs::create_dir_all(&unpack_dir)?;
+
+        // Unpack the image
+        let id = rand::random::<u64>().to_string();
         Ok(Container {
-            client,
+            client: image.client.clone(),
             image,
-            id: "".to_string(),
+            id,
+            rootfs: unpack_dir,
         })
     }
 }
 
 impl Manager for Container {
-    async fn launch(&self) -> Result<(), Box<dyn Error>> {
-        // let spec = include_str!("container_spec.json");
-        // let spec = spec
-        //         .to_string()
-        //         .replace("$ROOTFS", rootfs)
-        //         .replace("$OUTPUT", output);
-
-        //     let spec = Any {
-        //         type_url: "types.containerd.io/opencontainers/runtime-spec/1/Spec".to_string(),
-        //         value: spec.into_bytes(),
-        //     };
-        // let container = ContainerD::
-        // let request = CreateContainerRequest {
-        //     container: Some(container),
-        // };
-        // self.client.containers.create(request);
-        // Ok(())
-        unimplemented!()
-    }
-
-    async fn stop(&self) -> Result<(), Box<dyn Error>> {
-        unimplemented!()
+    async fn create(&self) -> Result<(), Box<dyn Error>> {
+        info!(
+            "Creating container {} with image {}",
+            self.id, self.image.name
+        );
+        let spec = include_str!("container_spec.json");
+        let spec = spec.to_string().replace("$ROOTFS", "rootfs");
+        let spec = Any {
+            type_url: "types.containerd.io/opencontainers/runtime-spec/1/Spec".to_string(),
+            value: spec.into_bytes(),
+        };
+        let container = ContainerD {
+            id: self.id.clone(),
+            image: self.image.name.clone(),
+            runtime: Some(Runtime {
+                name: "io.containerd.runc.v2".to_string(),
+                options: None,
+            }),
+            spec: Some(spec),
+            ..Default::default()
+        };
+        let request = CreateContainerRequest {
+            container: Some(container),
+        };
+        let request = with_namespace!(request, NAMESPACE);
+        info!("Launching request for container {}", self.id);
+        self.client.containers.clone().create(request).await?;
+        Ok(())
     }
 
     async fn remove(mut self) -> Result<(), Box<dyn Error>> {
         let req = DeleteContainerRequest { id: self.id };
         let req = with_namespace!(req, NAMESPACE);
-
         let _resp = self.client.containers.delete(req).await?;
         Ok(())
     }

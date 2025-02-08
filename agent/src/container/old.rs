@@ -3,10 +3,17 @@ use bollard::errors::Error;
 use bollard::exec::{self, CreateExecResults, StartExecResults};
 use bollard::image::CreateImageOptions;
 use bollard::secret::{ContainerCreateResponse, CreateImageInfo, ExecInspectResponse};
+use bollard::Docker;
 use futures_util::TryStreamExt;
+use tokio::sync::Mutex;
 use tracing::info;
+use lazy_static::lazy_static;
 
-use crate::dockerLocal;
+lazy_static! {
+    static ref AGENT_ID: Mutex<u32>  = Mutex::new(0);
+    pub static ref dockerLocal: Docker = Docker::connect_with_socket_defaults().unwrap();
+}
+
 
 pub async fn launch_container(image_name: &str) -> Result<String, bollard::errors::Error> {
     create_image(image_name).await?;
