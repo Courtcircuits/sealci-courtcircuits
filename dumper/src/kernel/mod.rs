@@ -14,6 +14,7 @@ use vm_memory::{Address, GuestAddress, GuestMemory, GuestMemoryMmap};
 
 use crate::common::error::Error;
 
+pub mod builder;
 // x86_64 boot constants. See https://www.kernel.org/doc/Documentation/x86/boot.txt for the full
 // documentation.
 // Header field: `boot_flag`. Must contain 0xaa55. This is the closest thing old Linux kernels

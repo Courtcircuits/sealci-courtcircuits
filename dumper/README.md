@@ -31,3 +31,10 @@ Then you can run the VM:
 ```sh
 cargo run -- --kernel-path ../../vm/linux-cloud-hypervisor/vmlinux
 ```
+
+## Note
+
+Build the kernel in a directory of your choice:
+```sh
+KCFLAGS="-Wa,-mx86-used-note=no" make O=$BUILD_DIR bzImage -j `nproc`
+```
