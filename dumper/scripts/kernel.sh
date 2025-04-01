@@ -8,6 +8,6 @@ then
 fi
 
 pushd $LINUX_REPO
-cp ../../scripts/alpine_config .config
-KCFLAGS="-Wa,-mx86-used-note=no" make bzImage -j `nproc`
+cp ../../scripts/alpine_config ./alpine_config
+KCFLAGS="-Wa,-mx86-used-note=no" KCONFIG_CONFIG="alpine_config" KBUILD_OUTPUT="/home/hugo/Bureau/cours/rust_sor/sealci/dumper/vm/linux-cloud-hypervisor" make vmlinux -j `nproc`
 popd
