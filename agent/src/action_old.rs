@@ -21,42 +21,15 @@ pub async fn launch_action(
     image_name: String,
     commands: &mut Vec<String>,
     log_input: Arc<Mutex<UnboundedSender<Result<ActionResponseStream, Status>>>>,
-    action_id: Arc<Mutex<u32>>,
     repo_url: String,
+    action_id: Arc<Mutex<u32>>,
 ) -> Result<(), Status> {
-    let _ = log_input.lock().unwrap().send(Ok(ActionResponseStream {
-        log: "Launching action".to_string(),
-        action_id: *action_id.lock().unwrap(),
-        result: Some(ActionResult {
-            completion: 1,
-            exit_code: None,
-        }),
-    }));
-
     let container_id: String = match launch_container(&image_name).await {
         Ok(id) => id,
         Err(e) => return Err(Status::aborted(format!("Launching error: {}", e))),
     };
 
-    let _ = log_input.lock().unwrap().send(Ok(ActionResponseStream {
-        log: format!("Container launched using image: {}", image_name),
-        action_id: *action_id.lock().unwrap(),
-        result: Some(ActionResult {
-            completion: 1,
-            exit_code: None,
-        }),
-    }));
-
     let repo_name = setup_repository(repo_url, container_id.as_str()).await?;
-
-    let _ = log_input.lock().unwrap().send(Ok(ActionResponseStream {
-        log: format!("Repository {} cloned", repo_name),
-        action_id: *action_id.lock().unwrap(),
-        result: Some(ActionResult {
-            completion: 1,
-            exit_code: None,
-        }),
-    }));
 
     for command in &mut *commands {
         let log_input = Arc::clone(&log_input);
@@ -66,8 +39,8 @@ pub async fn launch_action(
             command,
             &container_id,
             log_input.clone(),
-            action_id.clone(),
             Some(absolute_path),
+            action_id.clone(),
         )
         .await?;
         match wait_for_command(exec_id, &container_id).await {
@@ -84,19 +57,6 @@ pub async fn launch_action(
             }
         }
     }
-    log_input
-        .lock()
-        .unwrap()
-        .send(Ok(ActionResponseStream {
-            log: "Action completed".to_string(),
-            action_id: *action_id.lock().unwrap(),
-            result: Some(ActionResult {
-                completion: 3,
-                exit_code: None,
-            }),
-        }))
-        .unwrap();
-    clean_action(container_id.as_str()).await?;
     Ok(())
 }
 
@@ -119,22 +79,10 @@ pub async fn start_command(
     command: &mut String,
     container_id: &str,
     log_input: Arc<Mutex<UnboundedSender<Result<ActionResponseStream, Status>>>>,
-    action_id: Arc<Mutex<u32>>,
     repo_name: Option<String>,
+    action_id: Arc<Mutex<u32>>,
 ) -> Result<String, Status> {
-    let exec_id = match create_exec(&command.to_string(), container_id, repo_name).await {
-        Ok(CreateExecResults { id }) => id,
-        Err(_) => return Err(Status::aborted("Error happened when creating exec")),
-    };
-    let _ = log_input.lock().unwrap().send(Ok(ActionResponseStream {
-        log: command.clone(),
-        action_id: *action_id.lock().unwrap(),
-        result: Some(ActionResult {
-            completion: 2,
-            exit_code: None,
-        }),
-    }));
-    let mut container_ouput = match start_exec(&exec_id).await {
+    let mut container_ouput = match start_exec("").await {
         Ok(StartExecResults::Attached { output, input: _ }) => output,
         Ok(StartExecResults::Detached) => return Err(Status::aborted("Can't attach to container")),
         Err(_) => return Err(Status::aborted("Error happened when launching action")),
@@ -159,7 +107,7 @@ pub async fn start_command(
     Ok(exec_id)
 }
 
-pub async fn wait_for_command(exec_id: String, container_id: &String) -> Result<(), Status> {
+pub async fn wait_for_command(exec_id: String) -> Result<(), Status> {
     loop {
         let exec_state = match inspect_exec(&exec_id).await {
             Ok(exec_state) => exec_state,
@@ -170,8 +118,6 @@ pub async fn wait_for_command(exec_id: String, container_id: &String) -> Result<
                 break;
             }
             Some(exit_code) => {
-                info!("Step exited with an error: {}", exit_code);
-                clean_action(container_id).await?;
                 return Err(Status::aborted("Step exited with an error"));
             }
             None => {}
@@ -187,22 +133,6 @@ pub async fn wait_for_command(exec_id: String, container_id: &String) -> Result<
         }
         sleep(Duration::from_secs(1)).await;
     }
-    Ok(())
-}
-
-pub async fn clean_action(container_id: &str) -> Result<(), Status> {
-    match stop_container(container_id).await {
-        Ok(_) => {
-            info!("Container stopped");
-        }
-        Err(_) => return Err(Status::aborted("Error happened when stopping container")),
-    };
-    match remove_container(container_id).await {
-        Ok(_) => {
-            info!("Container stopped");
-        }
-        Err(_) => return Err(Status::aborted("Error happened when stopping container")),
-    };
     Ok(())
 }
 

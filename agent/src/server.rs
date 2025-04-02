@@ -1,4 +1,4 @@
-use crate::action::launch_action;
+use crate::action_old::launch_action;
 use crate::proto::{action_service_server::ActionService, ActionRequest, ActionResponseStream};
 use futures_util::Stream;
 use std::pin::Pin;
@@ -33,17 +33,6 @@ impl ActionService for ActionsLauncher {
 
         let log_input = Arc::new(Mutex::new(log_input));
         let action_id = Arc::new(Mutex::new(request_body.action_id));
-        tokio::spawn(async move {
-            let _ = launch_action(
-                container_image,
-                &mut request_body.commands,
-                log_input.clone(),
-                action_id.clone(),
-                request_body.repo_url,
-            )
-            .await
-            .map_err(|e| Status::aborted(format!("Launching error {}", e)));
-        });
 
         let stream = UnboundedReceiverStream::new(log_ouput);
         Ok(Response::new(

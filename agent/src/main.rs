@@ -6,9 +6,11 @@ use server::ActionsLauncher;
 use std::error::Error;
 use std::sync::Mutex;
 use tonic::transport::Server;
+
 use tracing::info;
-mod action;
+mod action_old;
 mod container;
+mod models;
 mod health_service;
 mod registering_service;
 pub mod server;
