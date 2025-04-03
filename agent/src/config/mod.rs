@@ -4,7 +4,7 @@ use clap::Parser;
 #[command(author, version, about, long_about = None)]
 pub struct Config {
     /// The host URL of the scheduler
-    #[clap(long, default_value = "http://[::1]:50051")]
+    #[clap(long, default_value = "http://0.0.0.0:5001")]
     pub shost: String,
 
     /// The host URL you want the scheduler to contact the agent on

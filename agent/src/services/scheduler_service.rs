@@ -4,6 +4,7 @@ use tokio::{
 };
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::Request;
+use tracing::info;
 
 use crate::{
     models::error::Error::{self, ConnectionError, RegistrationError},
@@ -29,6 +30,7 @@ impl SchedulerService {
         port: u32,
         health_service: HealthService,
     ) -> Result<Self, Error> {
+        info!("{}", scheduler_url.to_string());
         let scheduler_agent_client = AgentClient::connect(scheduler_url.to_string())
             .await
             .map_err(ConnectionError)?;

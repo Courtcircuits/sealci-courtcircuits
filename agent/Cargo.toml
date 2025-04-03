@@ -28,3 +28,11 @@ rand = "0.9.0"
 
 [build-dependencies]
 tonic-build = "0.12.0"
+
+[[bin]]
+name = "scheduler_mock"
+path = "scheduler_mock/main.rs"
+
+[[bin]]
+name = "agent"
+path = "src/main.rs"
