@@ -1,23 +1,21 @@
-use std::{path::PathBuf, sync::Arc};
-
-use tokio::sync::mpsc::UnboundedSender;
-
 use super::{container::Container, error::Error};
 use crate::models::container::exec_handle::ExecResult;
+use std::sync::Arc;
 
 pub struct Step {
     /// This is the command that will be executed in the container
-    command: String,
+    pub command: String,
 
     /// This is the directory in which the command will be executed
-    execute_in: Option<PathBuf>,
+    execute_in: Option<String>,
 
     /// Container
     container: Arc<Container>,
 }
 
 impl Step {
-    pub fn new(command: String, execute_in: Option<PathBuf>, container: Arc<Container>) -> Self {
+    pub fn new(command: String, execute_in: Option<String>, container: Arc<Container>) -> Self {
+        
         Self {
             command,
             execute_in,
@@ -26,7 +24,9 @@ impl Step {
     }
 
     /// Execute the command in the container
-    pub async fn execute(&self,workdir: Option<String>) -> Result<ExecResult, Error> {
-        self.container.exec(self.command.clone(), workdir).await
+    pub async fn execute(&self) -> Result<ExecResult, Error> {
+        self.container
+            .exec(self.command.clone(), self.execute_in.clone())
+            .await
     }
 }

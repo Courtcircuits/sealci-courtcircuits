@@ -34,7 +34,6 @@ pub(crate) async fn report_health(
                 previous_usage = current_health;
                 let _ = tx.send(current_health);
                 info!("Health status sent: {:?}", current_health);
-                info!("Health status sent: {:?}", current_health);
             }
 
             // Delay before next check
