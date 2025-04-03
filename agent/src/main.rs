@@ -1,69 +1,42 @@
+use agent::config::Config;
+use agent::models::error::Error;
 use agent::proto::action_service_server::ActionServiceServer;
-use agent::{health_service::report_health, registering_service, server, services};
+use agent::server;
+use agent::services::action_service::ActionService;
+use agent::services::health_service::HealthService;
+use agent::services::scheduler_service::SchedulerService;
 use bollard::Docker;
 use clap::Parser;
-use lazy_static::lazy_static;
-use registering_service::register_agent;
 use server::ActionsLauncher;
-use services::container_service;
-use std::error::Error;
-use std::sync::{Arc, Mutex};
+use std::net::AddrParseError;
+use std::sync::Arc;
 use tonic::transport::Server;
 
-use tracing::{error, info};
-
-lazy_static! {
-    static ref AGENT_ID: Mutex<u32> = Mutex::new(0);
-}
-
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// The host URL of the scheduler
-    #[clap(long, default_value = "http://[::1]:50051")]
-    shost: String,
-
-    /// The host URL you want the scheduler to contact the agent on
-    #[clap(long, default_value = "http://[::1]")]
-    ahost: String,
-
-    /// The port of the agent to listen on
-    #[clap(long, default_value = "9001")]
-    port: u32,
-}
+use tracing::info;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
-    let args: Args = Args::parse();
-    info!("Connecting to scheduler at {}", args.shost);
-
-    let (mut client, id) = match register_agent(&args.shost, &args.ahost, args.port).await {
-        Ok(res) => {
-            info!("Connection succeeded");
-            res
-        }
-        Err(err) => {
-            error!("Connection failed: {:?}", err);
-            return Err(err);
-        }
-    };
-    tokio::spawn(async move {
-        loop {
-            let _ = report_health(&mut client, id).await;
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        }
-    });
-
-    info!("Agent id: {}", id);
-    info!("Starting server...");
-    let addr = format!("0.0.0.0:{}", args.port).parse()?;
+    let config = Config::parse();
+    let health_service = HealthService::new();
+    let mut scheduler_service =
+        SchedulerService::init(config.shost, config.ahost, config.port, health_service).await?;
+    scheduler_service.register().await?;
+    let health_stream_handle = scheduler_service.report_health().await?;
+    let addr = format!("0.0.0.0:{}", config.port)
+        .parse()
+        .map_err(|e: AddrParseError| Error::Error(e.to_string()))?;
     info!("Starting server on {}", addr);
     let docker: Arc<Docker> = Arc::new(Docker::connect_with_socket_defaults().unwrap());
-    docker.ping().await?;
-    let container_service = container_service::ContainerService::new(docker.clone());
-    let actions = ActionsLauncher { container_service };
+    docker.ping().await.map_err(Error::DockerConnectionError)?;
+    let action_service = ActionService::new(docker);
+    let actions = ActionsLauncher { action_service };
     let server = ActionServiceServer::new(actions);
-    Server::builder().add_service(server).serve(addr).await?;
+    Server::builder()
+        .add_service(server)
+        .serve(addr)
+        .await
+        .map_err(Error::ServeError)?;
+    let _ = health_stream_handle.await;
     Ok(())
 }

@@ -1,5 +1,8 @@
 use agent::models::{
-    action::Action, container::mock::MockContainer, output_pipe::{OutputPipe, Pipe}, step::Step,
+    action::Action,
+    container::mock::MockContainer,
+    output_pipe::{OutputPipe, Pipe},
+    step::Step,
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;

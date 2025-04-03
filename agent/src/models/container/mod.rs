@@ -29,7 +29,11 @@ pub trait ContainerOperations {
     fn start(&self) -> impl std::future::Future<Output = Result<(), Error>>;
 
     /// Execute a command in the container
-    fn exec(&self, command: String, workdir: Option<String>) -> impl std::future::Future<Output = Result<ExecResult, Error>>;
+    fn exec(
+        &self,
+        command: String,
+        workdir: Option<String>,
+    ) -> impl std::future::Future<Output = Result<ExecResult, Error>>;
 
     /// Remove the container
     fn remove(&self) -> impl std::future::Future<Output = Result<(), Error>> + Send;
