@@ -10,7 +10,6 @@ use tonic::transport::Server;
 use tracing::info;
 
 mod services;
-mod action_old;
 mod container;
 mod models;
 mod health_service;

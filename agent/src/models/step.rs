@@ -26,7 +26,7 @@ impl Step {
     }
 
     /// Execute the command in the container
-    pub async fn execute(&self) -> Result<ExecResult, Error> {
-        self.container.exec(self.command.clone(), None).await
+    pub async fn execute(&self,workdir: Option<String>) -> Result<ExecResult, Error> {
+        self.container.exec(self.command.clone(), workdir).await
     }
 }

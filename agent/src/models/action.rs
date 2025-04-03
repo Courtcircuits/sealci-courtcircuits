@@ -1,5 +1,5 @@
+use super::error::Error::ExecError;
 use std::sync::Arc;
-
 use tokio::{sync::mpsc::UnboundedSender, task};
 use tokio_stream::StreamExt;
 use tonic::Status;
@@ -46,7 +46,9 @@ impl Action {
 
     pub async fn execute(&self) -> Result<(), Error> {
         for step in &self.steps {
-            let mut exec_result = step.execute().await?;
+            // Execute the step in the folder where we cloned the repository
+            // When cloning we use the action id as a name for the folder
+            let mut exec_result = step.execute(Some(self.id.to_string())).await?;
             let pipe = self.pipe.clone();
             task::spawn(async move {
                 while let Some(log) = exec_result.output.next().await {
@@ -69,6 +71,14 @@ impl Action {
                 }
             }
         }
+        Ok(())
+    }
+
+    async fn setup_repository(&self) -> Result<(), Error> {
+        // Cloning the repository in a folder that takes as name the id of the action
+        let setup_command = format!("git clone --depth 1 {} {}", self.repository_url, self.id);
+        let exec_result = self.container.exec(setup_command, None).await?;
+        exec_result.exec_handle.await.map_err(ExecError)?;
         Ok(())
     }
 

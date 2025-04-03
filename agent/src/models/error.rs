@@ -7,6 +7,6 @@ pub enum Error {
     ContainerRemoveError(bollard::errors::Error),
     ContainerExecError(bollard::errors::Error),
     ContainerExecDetachedError,
-    StepError(JoinError),
+    ExecError(JoinError),
     StepOutputError(i32)
 }
