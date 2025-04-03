@@ -1,5 +1,6 @@
 use tokio::task::JoinError;
 
+#[allow(dead_code)]
 pub enum Error {
     // Define your custom error variants here
     ContainerStartError(bollard::errors::Error),
@@ -8,5 +9,5 @@ pub enum Error {
     ContainerExecError(bollard::errors::Error),
     ContainerExecDetachedError,
     ExecError(JoinError),
-    StepOutputError(i32)
+    StepOutputError(i32),
 }

@@ -8,4 +8,3 @@ pub struct ExecResult {
     pub output: Pin<Box<dyn Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send>>,
     pub exec_handle: JoinHandle<i32>,
 }
-

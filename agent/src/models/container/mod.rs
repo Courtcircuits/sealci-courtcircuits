@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 use tokio::{task, time::sleep};
 pub mod exec_handle;
+pub mod mock;
 use bollard::{
     container::Config,
     exec::{CreateExecOptions, StartExecResults},
@@ -22,6 +23,18 @@ pub struct Container {
     docker: Arc<Docker>,
 }
 
+/// Trait for container operations
+pub trait ContainerOperations {
+    /// Start the container
+    fn start(&self) -> impl std::future::Future<Output = Result<(), Error>>;
+
+    /// Execute a command in the container
+    fn exec(&self, command: String, workdir: Option<String>) -> impl std::future::Future<Output = Result<ExecResult, Error>>;
+
+    /// Remove the container
+    fn remove(&self) -> impl std::future::Future<Output = Result<(), Error>> + Send;
+}
+
 impl Container {
     pub fn new(image: String, docker: Arc<Docker>) -> Self {
         let id = format!("{:x}", rand::random::<u128>());
@@ -37,13 +50,19 @@ impl Container {
         };
         Container { id, config, docker }
     }
+}
 
-    pub async fn start(&self) -> Result<(), Error> {
+impl ContainerOperations for Container {
+    async fn start(&self) -> Result<(), Error> {
         // Get the image
         self.docker
             .create_image(
                 Some(CreateImageOptions {
-                    from_image: self.config.image.clone().unwrap_or("debian".to_string()),
+                    from_image: self
+                        .config
+                        .image
+                        .clone()
+                        .unwrap_or("debian:latest".to_string()),
                     ..Default::default()
                 }),
                 None,
@@ -70,11 +89,7 @@ impl Container {
         Ok(())
     }
 
-    pub async fn exec(
-        &self,
-        command: String,
-        workdir: Option<String>,
-    ) -> Result<ExecResult, Error> {
+    async fn exec(&self, command: String, workdir: Option<String>) -> Result<ExecResult, Error> {
         let exec = self
             .docker
             .create_exec(
@@ -130,7 +145,7 @@ impl Container {
         })
     }
 
-    pub async fn remove(&self) -> Result<(), Error> {
+    async fn remove(&self) -> Result<(), Error> {
         self.docker
             .remove_container(&self.id, None)
             .await

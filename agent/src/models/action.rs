@@ -1,38 +1,36 @@
-use super::error::Error::ExecError;
+use super::{container::ContainerOperations, error::Error::ExecError, step::Step};
 use std::sync::Arc;
 use tokio::{sync::mpsc::UnboundedSender, task};
 use tokio_stream::StreamExt;
 use tonic::Status;
 use tracing::{debug, error};
 
-use crate::proto::ActionResponseStream;
+use crate::{models::output_pipe::Pipe, proto::ActionResponseStream};
 
 use super::{
-    container::Container,
     error::Error::{self, StepOutputError},
     output_pipe::OutputPipe,
-    step::Step,
 };
 
-pub struct Action {
+pub struct Action<T: ContainerOperations> {
     pub id: u32,
-    container: Arc<Container>,
-    steps: Vec<Step>,
+    pub container: Arc<T>,
+    steps: Vec<Step<T>>,
     pipe: Arc<OutputPipe>,
     pub repository_url: String,
 }
 
-impl Action {
+impl<T: ContainerOperations> Action<T> {
     pub fn new(
         id: u32,
-        container: Container,
+        container: T,
         commands: Vec<String>,
         stdout: UnboundedSender<Result<ActionResponseStream, Status>>,
         repository_url: String,
     ) -> Self {
         let pipe = Arc::new(OutputPipe::new(id, stdout));
         let container = Arc::new(container);
-        let steps: Vec<Step> = commands
+        let steps: Vec<Step<T>> = commands
             .iter()
             .map(|c| Step::new(c.into(), Some(format!("/{}", id)), container.clone()))
             .collect();
@@ -94,5 +92,170 @@ impl Action {
 
     pub async fn cleanup(&self) -> Result<(), Error> {
         self.container.remove().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::container::mock::MockContainer;
+    use std::sync::{Arc, Mutex};
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_action_setup_repository_calls_exec_with_git_clone() {
+        // Arrange
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mock_container = MockContainer {
+            exec_calls: Mutex::new(Vec::new()),
+            should_fail: false,
+        };
+
+        let action_id = 42;
+        let repo_url = "https://github.com/user/repo.git".to_string();
+        let action = Action::new(
+            action_id,
+            mock_container,
+            vec!["echo 'test'".to_string()],
+            tx,
+            repo_url.clone(),
+        );
+
+        // Act
+        let result = action.setup_repository().await;
+
+        // Assert
+        assert!(result.is_ok());
+
+        let container = Arc::new(&action.container);
+        let calls = container.exec_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+
+        // Verify the git clone command has correct format
+        let expected_cmd = format!("git clone --depth 1 {} {}", repo_url, action_id);
+        assert_eq!(calls[0].0, expected_cmd);
+        assert_eq!(calls[0].1, None); // No working directory for clone
+    }
+
+    #[tokio::test]
+    async fn test_action_execute_runs_all_steps() {
+        // Arrange
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mock_container = MockContainer {
+            exec_calls: Mutex::new(Vec::new()),
+            should_fail: false,
+        };
+
+        let commands = vec![
+            "echo 'step 1'".to_string(),
+            "echo 'step 2'".to_string(),
+            "echo 'step 3'".to_string(),
+        ];
+
+        let action = Action::new(
+            1,
+            mock_container,
+            commands.clone(),
+            tx,
+            "https://example.com/repo.git".to_string(),
+        );
+
+        // Act
+        let result = action.execute().await;
+
+        // Assert
+        assert!(result.is_ok());
+
+        let container = Arc::new(&action.container);
+        let calls = container.exec_calls.lock().unwrap();
+
+        // Check that all steps were executed
+        assert_eq!(calls.len(), commands.len());
+
+        // Verify each step was called with correct working directory
+        for (i, command) in commands.iter().enumerate() {
+            assert_eq!(&calls[i].0, command);
+            assert_eq!(calls[i].1, Some("/1".to_string()));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_action_execute_handles_step_failure() {
+        // Arrange - Setup a mock that will fail on execution
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mock_container = MockContainer {
+            exec_calls: Mutex::new(Vec::new()),
+            should_fail: true,
+        };
+
+        let action = Action::new(
+            1,
+            mock_container,
+            vec!["echo 'will fail'".to_string()],
+            tx,
+            "https://example.com/repo.git".to_string(),
+        );
+
+        // Act
+        let result = action.execute().await;
+
+        // Assert
+        assert!(result.is_err());
+        match result {
+            Err(Error::ContainerExecError(_)) => (), // Expected error
+            _ => panic!("Unexpected result"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_action_cleanup_removes_container() {
+        // Arrange
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mock_container = MockContainer {
+            exec_calls: Mutex::new(Vec::new()),
+            should_fail: false,
+        };
+
+        let action = Action::new(
+            1,
+            mock_container,
+            vec![],
+            tx,
+            "https://example.com/repo.git".to_string(),
+        );
+
+        // Act
+        let result = action.cleanup().await;
+
+        // Assert
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_action_new_initializes_with_correct_values() {
+        // Arrange
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let mock_container = MockContainer {
+            exec_calls: Mutex::new(Vec::new()),
+            should_fail: false,
+        };
+
+        let action_id = 99;
+        let commands = vec!["cmd1".to_string(), "cmd2".to_string()];
+        let repo_url = "https://example.com/test.git".to_string();
+
+        // Act
+        let action = Action::new(
+            action_id,
+            mock_container,
+            commands.clone(),
+            tx,
+            repo_url.clone(),
+        );
+
+        // Assert
+        assert_eq!(action.id, action_id);
+        assert_eq!(action.repository_url, repo_url);
+        assert_eq!(action.steps.len(), commands.len());
     }
 }

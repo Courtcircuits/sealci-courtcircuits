@@ -1,6 +1,7 @@
+use agent::proto::action_service_server::ActionServiceServer;
+use agent::{health_service::report_health, registering_service, server, services};
 use bollard::Docker;
 use clap::Parser;
-use health_service::report_health;
 use lazy_static::lazy_static;
 use registering_service::register_agent;
 use server::ActionsLauncher;
@@ -9,18 +10,7 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tonic::transport::Server;
 
-use tracing::{info, error};
-
-mod health_service;
-mod models;
-mod registering_service;
-mod server;
-mod services;
-use crate::proto::action_service_server::ActionServiceServer;
-mod proto {
-    tonic::include_proto!("scheduler");
-    tonic::include_proto!("actions");
-}
+use tracing::{error, info};
 
 lazy_static! {
     static ref AGENT_ID: Mutex<u32> = Mutex::new(0);

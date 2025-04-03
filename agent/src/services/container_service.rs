@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use bollard::Docker;
 
-use crate::models::{container::Container, error::Error};
+use crate::models::{
+    container::{Container, ContainerOperations},
+    error::Error,
+};
 
 pub struct ContainerService {
     docker_client: Arc<Docker>,
