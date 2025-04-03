@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::{task, time::sleep};
 pub mod exec_handle;
 use bollard::{
@@ -19,11 +19,11 @@ use super::error::Error::{
 pub struct Container {
     pub id: String,
     pub config: Config<String>,
-    docker: Docker,
+    docker: Arc<Docker>,
 }
 
 impl Container {
-    pub fn new(image: String, docker: Docker) -> Self {
+    pub fn new(image: String, docker: Arc<Docker>) -> Self {
         let id = format!("{:x}", rand::random::<u128>());
         let entrypoint = Some(vec!["/bin/sh".to_string()]);
         let config = Config {
@@ -106,7 +106,7 @@ impl Container {
                     Err(_) => return 1,
                 };
                 match exec_state.exit_code {
-                    Some(exit_code) => return exit_code,
+                    Some(exit_code) => return exit_code as i32,
                     _ => {}
                 }
                 match exec_state.running {

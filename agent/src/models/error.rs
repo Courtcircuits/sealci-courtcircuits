@@ -8,5 +8,5 @@ pub enum Error {
     ContainerExecError(bollard::errors::Error),
     ContainerExecDetachedError,
     StepError(JoinError),
-    StepOutputError
+    StepOutputError(i32)
 }

@@ -5,7 +5,7 @@ use std::{
 
 use bollard::exec::{CreateExecResults, StartExecResults};
 use futures_util::StreamExt;
-use tokio::{spawn, sync::mpsc::UnboundedSender, time::sleep};
+use tokio::{spawn, sync::mpsc::UnboundedSender, task, time::sleep};
 use tonic::Status;
 use tracing::info;
 use url::Url;
@@ -35,7 +35,7 @@ pub async fn launch_action(
         let log_input = Arc::clone(&log_input);
         let action_id = Arc::clone(&action_id);
         let absolute_path = format!("/{}", repo_name);
-        let exec_id = start_command(
+        let exec_id = start_command(    
             command,
             &container_id,
             log_input.clone(),
@@ -87,7 +87,7 @@ pub async fn start_command(
         Ok(StartExecResults::Detached) => return Err(Status::aborted("Can't attach to container")),
         Err(_) => return Err(Status::aborted("Error happened when launching action")),
     };
-    spawn(async move {
+    task::spawn(async move {
         while let Some(log) = container_ouput.next().await {
             let container_log_output = match log {
                 Ok(log_output) => log_output,
