@@ -59,14 +59,15 @@ impl Container {
 impl ContainerOperations for Container {
     async fn start(&self) -> Result<(), Error> {
         // Get the image
+        let image = self
+            .config
+            .image
+            .clone()
+            .ok_or(Error::Error("Image was not provided".to_string()))?;
         self.docker
             .create_image(
                 Some(CreateImageOptions {
-                    from_image: self
-                        .config
-                        .image
-                        .clone()
-                        .unwrap_or("debian:latest".to_string()),
+                    from_image: image,
                     ..Default::default()
                 }),
                 None,

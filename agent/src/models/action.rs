@@ -72,6 +72,7 @@ impl<T: ContainerOperations> Action<T> {
 
             if let Ok(exit_code) = exit_status {
                 if exit_code != 0 {
+                    self.cleanup().await?;
                     self.pipe
                         .output_log("Action failed".to_string(), 3, Some(exit_code));
                     return Err(StepOutputError(exit_code));
