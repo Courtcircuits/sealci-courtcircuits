@@ -19,4 +19,9 @@ pub enum Error {
     RegistrationError(Status),
     ReportHealthError(Status),
     NotRegisteredError,
+    HealthStreamError,
+    ActionNotFound,
+    ActionStateError,
+    BrokerSendError(String),
+    ChannelError(String),
 }

@@ -1,7 +1,3 @@
-// This file is a simple mock for testing purpose
-// In order to not break the build it is commented out
-// As you can see the service is missing some implementation for the moment
-
 use agent::proto::{
     agent_server::{Agent, AgentServer},
     HealthStatus, RegisterAgentRequest, RegisterAgentResponse,
@@ -21,8 +17,12 @@ impl Agent for RegistrationService {
 
     async fn report_health_status(
         &self,
-        _request: tonic::Request<Streaming<HealthStatus>>,
+        request: tonic::Request<Streaming<HealthStatus>>,
     ) -> Result<tonic::Response<agent::proto::Empty>, tonic::Status> {
+        let mut req = request.into_inner();
+        while let Some(status) = req.message().await? {
+            println!("Received health status: {:?}", status);
+        }
         Ok(Response::new(agent::proto::Empty {}))
     }
 }
@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let reg = RegistrationService::default();
     Server::builder()
-        .add_service(AgentServer::new(reg)) // Corrected line
+        .add_service(AgentServer::new(reg))
         .serve(addr)
         .await?;
 

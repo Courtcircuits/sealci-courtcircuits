@@ -5,4 +5,6 @@ pub mod proto {
     tonic::include_proto!("scheduler");
     tonic::include_proto!("actions");
 }
+pub mod app;
 pub mod config;
+pub mod brokers;

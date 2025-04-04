@@ -1,7 +1,10 @@
 use crate::proto::Health;
 use std::sync::Arc;
 use sysinfo::System;
-use tokio::sync::{mpsc, Mutex};
+use tokio::{
+    sync::{mpsc, Mutex},
+    task::JoinHandle,
+};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[derive(Clone)]
@@ -16,14 +19,14 @@ impl HealthService {
         }
     }
 
-    pub fn get_health_stream(&mut self) -> UnboundedReceiverStream<Health> {
+    pub fn get_health_stream(&mut self) -> (UnboundedReceiverStream<Health>, JoinHandle<()>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let mut previous_usage = Health {
             cpu_avail: 0,
             memory_avail: 0,
         };
         let mut service = self.clone();
-        tokio::spawn(async move {
+        let handle_health_lifecycle = tokio::spawn(async move {
             loop {
                 // Fetch current usage
                 let current_health = service.get_health().await;
@@ -38,7 +41,7 @@ impl HealthService {
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
         });
-        UnboundedReceiverStream::new(rx)
+        (UnboundedReceiverStream::new(rx), handle_health_lifecycle)
     }
 
     fn has_significant_change(prev: Health, current: Health, threshold: f32) -> bool {

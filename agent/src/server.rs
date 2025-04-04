@@ -27,12 +27,12 @@ impl ActionServiceGrpc for ActionsLauncher {
         let request_body = request.into_inner();
         let context = request_body
             .context
-            .ok_or_else(|| Status::invalid_argument("Context is missing"))?;
+            .ok_or(Status::invalid_argument("Context is missing"))?;
         let container_image = context
             .container_image
-            .ok_or_else(|| Status::invalid_argument("Container image is missing"))?;
+            .ok_or(Status::invalid_argument("Container image is missing"))?;
 
-        let action = self
+        let mut action = self
             .action_service
             .create(
                 container_image,

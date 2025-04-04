@@ -1,23 +1,25 @@
 use super::{container::ContainerOperations, error::Error::ExecError, step::Step};
+use super::{
+    error::Error::{self, StepOutputError},
+    output_pipe::OutputPipe,
+};
+use crate::{models::output_pipe::Pipe, proto::ActionResponseStream};
+use state::{ActionState, State};
 use std::sync::Arc;
 use tokio::{sync::mpsc::UnboundedSender, task};
 use tokio_stream::StreamExt;
 use tonic::Status;
 use tracing::{debug, error};
+mod state;
 
-use crate::{models::output_pipe::Pipe, proto::ActionResponseStream};
-
-use super::{
-    error::Error::{self, StepOutputError},
-    output_pipe::OutputPipe,
-};
-
+#[derive(Clone)]
 pub struct Action<T: ContainerOperations> {
     pub id: u32,
     pub container: Arc<T>,
     steps: Vec<Step<T>>,
     pipe: Arc<OutputPipe>,
     pub repository_url: String,
+    pub state: ActionState,
 }
 
 impl<T: ContainerOperations> Action<T> {
@@ -34,16 +36,19 @@ impl<T: ContainerOperations> Action<T> {
             .iter()
             .map(|c| Step::new(c.into(), Some(format!("/{}", id)), container.clone()))
             .collect();
+        let state = ActionState::new();
+
         Self {
             id,
             container,
             steps,
             repository_url,
             pipe,
+            state,
         }
     }
 
-    pub async fn execute(&self) -> Result<(), Error> {
+    pub async fn execute(&mut self) -> Result<(), Error> {
         for step in &self.steps {
             // Execute the step in the folder where we cloned the repository
             // When cloning we use the action id as a name for the folder
@@ -73,6 +78,7 @@ impl<T: ContainerOperations> Action<T> {
             if let Ok(exit_code) = exit_status {
                 if exit_code != 0 {
                     self.cleanup().await?;
+                    self.state.set(State::Completed)?;
                     self.pipe
                         .output_log("Action failed".to_string(), 3, Some(exit_code));
                     return Err(StepOutputError(exit_code));
@@ -80,6 +86,7 @@ impl<T: ContainerOperations> Action<T> {
             }
         }
         self.cleanup().await?;
+        self.state.set(State::Completed)?;
         Ok(())
     }
 
@@ -153,7 +160,7 @@ mod tests {
             "echo 'step 3'".to_string(),
         ];
 
-        let action = Action::new(
+        let mut action = Action::new(
             1,
             mock_container,
             commands.clone(),
@@ -189,7 +196,7 @@ mod tests {
             should_fail: true,
         };
 
-        let action = Action::new(
+        let mut action = Action::new(
             1,
             mock_container,
             vec!["echo 'will fail'".to_string()],

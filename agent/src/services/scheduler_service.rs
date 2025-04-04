@@ -1,10 +1,6 @@
-use tokio::{
-    sync::mpsc::unbounded_channel,
-    task::{self, JoinHandle},
-};
-use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
-use tonic::Request;
-use tracing::info;
+use tokio_stream::StreamExt;
+use tonic::IntoStreamingRequest;
+use tracing::{error, info};
 
 use crate::{
     models::error::Error::{self, ConnectionError, RegistrationError},
@@ -12,7 +8,7 @@ use crate::{
 };
 
 use super::health_service::HealthService;
-
+#[derive(Clone)]
 pub struct SchedulerService {
     /// This is the client that is exposed by the scheduler for the agent.
     scheduler_agent_client: AgentClient<tonic::transport::Channel>,
@@ -65,23 +61,21 @@ impl SchedulerService {
         Ok(())
     }
 
-    pub async fn report_health(&mut self) -> Result<JoinHandle<()>, Error> {
-        let (tx, rx) = unbounded_channel();
+    pub async fn report_health(&mut self) -> Result<(), Error> {
         let agent_id = self.agent_id.ok_or(Error::NotRegisteredError)?;
-
-        let mut health_stream = self.health_service.get_health_stream();
-        let health_stream_handle = task::spawn(async move {
-            while let health = health_stream.next().await {
-                match tx.send(HealthStatus { agent_id, health }) {
-                    Err(_) => break,
-                    _ => {}
-                };
-            }
-        });
+        let (health_stream, handle_health_stream) = self.health_service.get_health_stream();
+        let stream = health_stream
+            .map(move |health| HealthStatus {
+                agent_id,
+                health: Some(health),
+            })
+            .into_streaming_request();
         self.scheduler_agent_client
-            .report_health_status(Request::new(UnboundedReceiverStream::new(rx)))
+            .report_health_status(stream)
             .await
             .map_err(Error::ReportHealthError)?;
-        Ok(health_stream_handle)
+        handle_health_stream.await.map_err(|_|Error::HealthStreamError)?;
+        error!("Health ended");
+        Ok(())
     }
 }

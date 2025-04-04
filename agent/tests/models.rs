@@ -25,7 +25,7 @@ async fn test_model_integration_workflow() {
     ];
     let repo_url = "https://github.com/test/repo.git".to_string();
 
-    let action = Action::new(
+    let mut action = Action::new(
         action_id,
         mock_container,
         commands.clone(),
@@ -124,7 +124,7 @@ async fn test_action_error_propagation() {
         should_fail: true, // Configure to fail
     };
 
-    let action = Action::new(
+    let mut action = Action::new(
         1,
         mock_container,
         vec!["will_fail".to_string()],
@@ -162,7 +162,7 @@ async fn test_complete_workflow_with_cleanup() {
         should_fail: false,
     };
 
-    let action = Action::new(
+    let mut action = Action::new(
         99,
         mock_container,
         vec!["echo 'success'".to_string()],

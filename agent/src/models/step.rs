@@ -2,6 +2,7 @@ use super::{container::ContainerOperations, error::Error};
 use crate::models::container::exec_handle::ExecResult;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Step<T: ContainerOperations> {
     /// This is the command that will be executed in the container
     pub command: String,
