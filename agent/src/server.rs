@@ -2,12 +2,13 @@ use crate::proto::{
     action_service_server::ActionService as ActionServiceGrpc, ActionRequest, ActionResponseStream,
 };
 use crate::services::action_service::ActionService;
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt};
 use std::pin::Pin;
-use tokio::sync::mpsc::{self};
-use tokio::task;
+use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{async_trait, Request, Response, Status};
+use tracing::info;
 
 pub struct ActionsLauncher {
     pub action_service: ActionService,
@@ -22,8 +23,13 @@ impl ActionServiceGrpc for ActionsLauncher {
         &self,
         request: Request<ActionRequest>,
     ) -> Result<Response<Self::ExecutionActionStream>, Status> {
-        let (log_input, log_ouput) =
-            mpsc::unbounded_channel::<Result<ActionResponseStream, Status>>();
+        // Create two channels:
+        // 1. For normal log messages
+        let (log_tx, log_rx) = unbounded_channel::<Result<ActionResponseStream, Status>>();
+
+        // 2. For signaling completion
+        let (done_tx, done_rx) = oneshot::channel::<()>();
+
         let request_body = request.into_inner();
         let context = request_body
             .context
@@ -37,15 +43,25 @@ impl ActionServiceGrpc for ActionsLauncher {
             .create(
                 container_image,
                 request_body.commands,
-                log_input,
+                log_tx.clone(),
                 request_body.repo_url,
                 request_body.action_id,
             )
             .await
             .map_err(|_| Status::failed_precondition("Failed to create action"))?;
-        task::spawn(async move { action.execute().await });
-        Ok(Response::new(Box::pin(UnboundedReceiverStream::new(
-            log_ouput,
-        ))))
+
+        // Spawn a task to execute the action and signal completion
+        tokio::spawn(async move {
+            let _ = action.execute().await;
+            info!("Action executed");
+
+            // Signal completion then drop the sender
+            let _ = done_tx.send(());
+        });
+
+        // Convert receiver to stream
+        let log_stream = UnboundedReceiverStream::new(log_rx);
+        let stream = log_stream.take_until(done_rx);
+        Ok(Response::new(Box::pin(stream)))
     }
 }

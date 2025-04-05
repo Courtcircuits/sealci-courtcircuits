@@ -163,6 +163,10 @@ impl ContainerOperations for Container {
 
     async fn remove(&self) -> Result<(), Error> {
         self.docker()?
+            .stop_container(&self.id, None)
+            .await
+            .map_err(ContainerRemoveError)?;
+        self.docker()?
             .remove_container(&self.id, None)
             .await
             .map_err(ContainerRemoveError)?;

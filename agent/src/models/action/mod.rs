@@ -78,7 +78,6 @@ impl<T: ContainerOperations> Action<T> {
                 Ok(())
             });
             let exit_status = exec_result.exec_handle.await;
-
             if let Ok(exit_code) = exit_status {
                 if exit_code != 0 {
                     self.cleanup().await?;
@@ -108,7 +107,7 @@ impl<T: ContainerOperations> Action<T> {
 
     fn set_state(&mut self, state: State) {
         self.state = state.clone();
-        self.state_broker.state_channel.send_event(StateEvent {
+        let _ = self.state_broker.state_channel.send_event(StateEvent {
             state: state.clone(),
             action_id: self.id,
         });
