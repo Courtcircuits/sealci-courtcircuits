@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::models::action::state::State;
 
 use super::Channel;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateEvent {
     pub action_id: u32,
     pub state: State,

@@ -1,11 +1,9 @@
-
-
 use derive_more::Display;
 use tokio::task::JoinError;
 use tonic::Status;
 
 #[allow(dead_code)]
-#[derive(Debug,Display)]
+#[derive(Debug, Display)]
 pub enum Error {
     // Define your custom error variants here\
     Error(String),

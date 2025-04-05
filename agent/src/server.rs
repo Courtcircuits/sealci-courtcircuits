@@ -40,7 +40,8 @@ impl ActionServiceGrpc for ActionsLauncher {
             .ok_or(Status::invalid_argument("Container image is missing"))?;
 
         let mut action = self
-            .action_service.lock()
+            .action_service
+            .lock()
             .await
             .create(
                 container_image,

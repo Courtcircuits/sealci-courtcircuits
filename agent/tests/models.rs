@@ -1,9 +1,12 @@
-use agent::{brokers::state_broker::StateBroker, models::{
-    action::Action,
-    container::mock::MockContainer,
-    output_pipe::{OutputPipe, Pipe},
-    step::Step,
-}};
+use agent::{
+    brokers::state_broker::StateBroker,
+    models::{
+        action::Action,
+        container::mock::MockContainer,
+        output_pipe::{OutputPipe, Pipe},
+        step::Step,
+    },
+};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
@@ -31,7 +34,7 @@ async fn test_model_integration_workflow() {
         commands.clone(),
         tx.clone(),
         repo_url.clone(),
-        Arc::new(StateBroker::new())
+        Arc::new(StateBroker::new()),
     );
 
     // 3. Execute the workflow - setup and run action
@@ -131,7 +134,7 @@ async fn test_action_error_propagation() {
         vec!["will_fail".to_string()],
         tx,
         "https://example.com/repo.git".to_string(),
-        Arc::new(StateBroker::new())
+        Arc::new(StateBroker::new()),
     );
 
     // Attempt to setup repository (will fail)
@@ -170,7 +173,7 @@ async fn test_complete_workflow_with_cleanup() {
         vec!["echo 'success'".to_string()],
         tx,
         "https://example.com/test.git".to_string(),
-        Arc::new(StateBroker::new())
+        Arc::new(StateBroker::new()),
     );
 
     // Run full workflow

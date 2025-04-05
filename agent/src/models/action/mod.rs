@@ -8,6 +8,7 @@ use crate::brokers::Broker;
 use crate::{models::output_pipe::Pipe, proto::ActionResponseStream};
 use state::State;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio::{sync::mpsc::UnboundedSender, task};
 use tokio_stream::StreamExt;
 use tonic::Status;
@@ -21,7 +22,7 @@ pub struct Action<T: ContainerOperations> {
     steps: Vec<Step<T>>,
     pipe: Arc<OutputPipe>,
     pub repository_url: String,
-    pub state: State,
+    pub state: Arc<RwLock<State>>,
     pub state_broker: Arc<StateBroker>,
 }
 
@@ -40,7 +41,7 @@ impl<T: ContainerOperations> Action<T> {
             .iter()
             .map(|c| Step::new(c.into(), Some(format!("/{}", id)), container.clone()))
             .collect();
-        let state = State::InProgress;
+        let state = Arc::new(RwLock::new(State::InProgress));
         Self {
             id,
             container,
@@ -81,7 +82,7 @@ impl<T: ContainerOperations> Action<T> {
             if let Ok(exit_code) = exit_status {
                 if exit_code != 0 {
                     self.cleanup().await?;
-                    self.set_state(State::Completed);
+                    self.set_state(State::Failed).await;
                     self.pipe
                         .output_log("Action failed".to_string(), 3, Some(exit_code));
                     return Err(StepOutputError(exit_code));
@@ -89,7 +90,7 @@ impl<T: ContainerOperations> Action<T> {
             }
         }
         self.cleanup().await?;
-        self.set_state(State::Completed);
+        self.set_state(State::Completed).await;
         Ok(())
     }
 
@@ -105,10 +106,12 @@ impl<T: ContainerOperations> Action<T> {
         self.container.remove().await
     }
 
-    fn set_state(&mut self, state: State) {
-        self.state = state.clone();
+    async fn set_state(&mut self, state: State) {
+        let mut self_state = self.state.write().await;
+        *self_state = state.clone();
+        
         let _ = self.state_broker.state_channel.send_event(StateEvent {
-            state: state.clone(),
+            state,
             action_id: self.id,
         });
     }
