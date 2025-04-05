@@ -1,17 +1,21 @@
-use crate::action::launch_action;
-use crate::proto::{action_service_server::ActionService, ActionRequest, ActionResponseStream};
-use futures_util::Stream;
+use crate::proto::{
+    action_service_server::ActionService as ActionServiceGrpc, ActionRequest, ActionResponseStream,
+};
+use crate::services::action_service::ActionService;
+use futures_util::{Stream, StreamExt};
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc::{self};
+use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{async_trait, Request, Response, Status};
+use tracing::info;
 
-#[derive(Default)]
-pub struct ActionsLauncher {}
+pub struct ActionsLauncher {
+    pub action_service: ActionService,
+}
 
 #[async_trait]
-impl ActionService for ActionsLauncher {
+impl ActionServiceGrpc for ActionsLauncher {
     type ExecutionActionStream =
         Pin<Box<dyn Stream<Item = Result<ActionResponseStream, Status>> + Send>>;
 
@@ -19,35 +23,45 @@ impl ActionService for ActionsLauncher {
         &self,
         request: Request<ActionRequest>,
     ) -> Result<Response<Self::ExecutionActionStream>, Status> {
-        let (log_input, log_ouput) =
-            mpsc::unbounded_channel::<Result<ActionResponseStream, Status>>();
-        let mut request_body = request.into_inner();
-        let context = match request_body.context {
-            Some(context) => context,
-            None => return Err(Status::invalid_argument("Context is missing")),
-        };
-        let container_image = match context.container_image {
-            Some(container_image) => container_image,
-            None => return Err(Status::invalid_argument("Container image is missing")),
-        };
+        // Create two channels:
+        // 1. For normal log messages
+        let (log_tx, log_rx) = unbounded_channel::<Result<ActionResponseStream, Status>>();
 
-        let log_input = Arc::new(Mutex::new(log_input));
-        let action_id = Arc::new(Mutex::new(request_body.action_id));
-        tokio::spawn(async move {
-            let _ = launch_action(
+        // 2. For signaling completion
+        let (done_tx, done_rx) = oneshot::channel::<()>();
+
+        let request_body = request.into_inner();
+        let context = request_body
+            .context
+            .ok_or(Status::invalid_argument("Context is missing"))?;
+        let container_image = context
+            .container_image
+            .ok_or(Status::invalid_argument("Container image is missing"))?;
+
+        let mut action = self
+            .action_service
+            .create(
                 container_image,
-                &mut request_body.commands,
-                log_input.clone(),
-                action_id.clone(),
+                request_body.commands,
+                log_tx.clone(),
                 request_body.repo_url,
+                request_body.action_id,
             )
             .await
-            .map_err(|e| Status::aborted(format!("Launching error {}", e)));
+            .map_err(|_| Status::failed_precondition("Failed to create action"))?;
+
+        // Spawn a task to execute the action and signal completion
+        tokio::spawn(async move {
+            let _ = action.execute().await;
+            info!("Action executed");
+
+            // Signal completion then drop the sender
+            let _ = done_tx.send(());
         });
 
-        let stream = UnboundedReceiverStream::new(log_ouput);
-        Ok(Response::new(
-            Box::pin(stream) as Self::ExecutionActionStream
-        ))
+        // Convert receiver to stream
+        let log_stream = UnboundedReceiverStream::new(log_rx);
+        let stream = log_stream.take_until(done_rx);
+        Ok(Response::new(Box::pin(stream)))
     }
 }
