@@ -2,10 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use bollard::Docker;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio_stream::wrappers::WatchStream;
 use tonic::Status;
 
 use crate::{
-    brokers::{action_broker::ActionBroker, state_broker::StateBroker, Broker},
+    brokers::{action_broker::ActionBroker, state_broker::{StateBroker, StateEvent}, Broker},
     models::{
         action::Action,
         container::{Container, ContainerOperations},
@@ -14,11 +15,12 @@ use crate::{
     proto::ActionResponseStream,
 };
 
+#[derive(Clone)]
 pub struct ActionService {
     docker_client: Arc<Docker>,
     actions: HashMap<u32, Action<Container>>,
-    pub action_broker: ActionBroker,
-    pub state_broker: Arc<StateBroker>,
+    action_broker: ActionBroker,
+    state_broker: Arc<StateBroker>,
 }
 
 impl ActionService {
@@ -34,7 +36,7 @@ impl ActionService {
     }
 
     pub async fn create(
-        &self,
+        &mut self,
         image: String,
         commands: Vec<String>,
         log_input: UnboundedSender<Result<ActionResponseStream, Status>>,
@@ -52,6 +54,7 @@ impl ActionService {
             self.state_broker.clone(),
         );
         action.setup_repository().await?;
+        self.actions.insert(action.id, action.clone());
         self.action_broker
             .create_action_channel
             .send_event(action.clone())?;
@@ -83,5 +86,13 @@ impl ActionService {
             .get(&action_id)
             .cloned()
             .ok_or(Error::ActionNotFound)
+    }
+
+    pub fn creation_stream(&self) -> WatchStream<Option<Action<Container>>> {
+        self.action_broker.create_action_channel.subscribe()
+    }
+    
+    pub fn state_stream(&self) -> WatchStream<Option<StateEvent>> {
+        self.state_broker.state_channel.subscribe()
     }
 }

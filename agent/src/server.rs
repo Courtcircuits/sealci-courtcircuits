@@ -4,14 +4,15 @@ use crate::proto::{
 use crate::services::action_service::ActionService;
 use futures_util::{Stream, StreamExt};
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{async_trait, Request, Response, Status};
 use tracing::info;
 
 pub struct ActionsLauncher {
-    pub action_service: ActionService,
+    pub action_service: Arc<Mutex<ActionService>>,
 }
 
 #[async_trait]
@@ -39,7 +40,8 @@ impl ActionServiceGrpc for ActionsLauncher {
             .ok_or(Status::invalid_argument("Container image is missing"))?;
 
         let mut action = self
-            .action_service
+            .action_service.lock()
+            .await
             .create(
                 container_image,
                 request_body.commands,

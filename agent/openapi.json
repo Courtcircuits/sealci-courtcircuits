@@ -1,0 +1,241 @@
+openapi: 3.0.0
+info:
+  title: SealCI Agent API
+  description: API for managing and monitoring CI/CD actions
+  version: 1.0.0
+  contact:
+    name: SealCI Team
+servers:
+  - url: http://localhost:5001
+    description: Local development server
+paths:
+  /actions:
+    get:
+      summary: List all actions
+      description: Returns a list of all actions in the system
+      operationId: listActions
+      tags:
+        - actions
+      responses:
+        '200':
+          description: A list of actions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActionDto'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /actions/{id}:
+    get:
+      summary: Get action by ID
+      description: Returns a single action by its ID
+      operationId: getAction
+      tags:
+        - actions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+          description: ID of the action to fetch
+      responses:
+        '200':
+          description: Action found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDto'
+        '404':
+          description: Action not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    delete:
+      summary: Delete an action
+      description: Deletes an action by ID
+      operationId: deleteAction
+      tags:
+        - actions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+          description: ID of the action to delete
+      responses:
+        '204':
+          description: Action successfully deleted
+        '404':
+          description: Action not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /actions/create:
+    post:
+      summary: Create a new action
+      description: Creates a new action with the provided configuration
+      operationId: createAction
+      tags:
+        - actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActionRequest'
+      responses:
+        '201':
+          description: Action created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDto'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /actions/stream:
+    get:
+      summary: Stream action events
+      description: WebSocket endpoint to stream real-time action creation events
+      operationId: streamActions
+      tags:
+        - actions
+      responses:
+        '101':
+          description: WebSocket connection established
+
+  /actions/states:
+    get:
+      summary: Stream state events
+      description: WebSocket endpoint to stream real-time action state change events
+      operationId: streamStateEvents
+      tags:
+        - actions
+      responses:
+        '101':
+          description: WebSocket connection established
+
+components:
+  schemas:
+    ActionDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          description: Unique identifier for the action
+          example: 1
+        status:
+          type: string
+          description: Current status of the action
+          example: "Running"
+        repo_url:
+          type: string
+          description: Repository URL associated with the action
+          example: "https://github.com/user/repo"
+      required:
+        - id
+        - status
+        - repo_url
+    
+    CreateActionRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          description: Docker image to use for the action
+          example: "ubuntu:latest"
+        commands:
+          type: array
+          items:
+            type: string
+          description: List of commands to execute
+          example: ["echo 'Hello World'", "ls -la"]
+        repo_url:
+          type: string
+          description: Repository URL to clone
+          example: "https://github.com/user/repo"
+        action_id:
+          type: integer
+          format: int32
+          description: Unique identifier for the action
+          example: 1
+      required:
+        - image
+        - commands
+        - repo_url
+        - action_id
+    
+    StateEventDto:
+      type: object
+      properties:
+        action_id:
+          type: integer
+          format: int32
+          description: Identifier for the action
+          example: 1
+        state:
+          type: string
+          description: New state of the action
+          example: "Completed"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the state change occurred
+          example: "2023-04-05T12:34:56Z"
+      required:
+        - action_id
+        - state
+        - timestamp
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Action not found"
+        code:
+          type: integer
+          format: int32
+          description: Error code
+          example: 404
+      required:
+        - error

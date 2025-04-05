@@ -8,3 +8,4 @@ pub mod proto {
 pub mod app;
 pub mod brokers;
 pub mod config;
+pub mod controllers;
