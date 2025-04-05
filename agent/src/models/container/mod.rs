@@ -20,7 +20,7 @@ use super::error::Error::{
 pub struct Container {
     pub id: String,
     pub config: Config<String>,
-    docker: Arc<Docker>,
+    docker: Option<Arc<Docker>>,
 }
 
 /// Trait for container operations
@@ -52,19 +52,30 @@ impl Container {
             open_stdin: Some(true),
             ..Default::default()
         };
-        Container { id, config, docker }
+        Container {
+            id,
+            config,
+            docker: Some(docker),
+        }
+    }
+
+    fn docker(&self) -> Result<Arc<Docker>, Error> {
+        self.docker
+            .clone()
+            .ok_or(Error::Error("Docker not set".to_string()))
     }
 }
 
 impl ContainerOperations for Container {
     async fn start(&self) -> Result<(), Error> {
+        let docker = self.docker()?;
         // Get the image
         let image = self
             .config
             .image
             .clone()
             .ok_or(Error::Error("Image was not provided".to_string()))?;
-        self.docker
+        docker
             .create_image(
                 Some(CreateImageOptions {
                     from_image: image,
@@ -77,7 +88,7 @@ impl ContainerOperations for Container {
             .await
             .map_err(PullImageError)?;
 
-        self.docker
+        docker
             .create_container::<String, String>(
                 Some(bollard::container::CreateContainerOptions {
                     name: self.id.clone(),
@@ -87,7 +98,7 @@ impl ContainerOperations for Container {
             )
             .await
             .map_err(ContainerStartError)?;
-        self.docker
+        docker
             .start_container::<String>(&self.id, None)
             .await
             .map_err(ContainerStartError)?;
@@ -95,8 +106,9 @@ impl ContainerOperations for Container {
     }
 
     async fn exec(&self, command: String, workdir: Option<String>) -> Result<ExecResult, Error> {
-        let exec = self
-            .docker
+        let docker = self.docker()?;
+
+        let exec = docker
             .create_exec(
                 &self.id,
                 CreateExecOptions {
@@ -111,12 +123,11 @@ impl ContainerOperations for Container {
             )
             .await
             .map_err(ContainerExecError)?;
-        let exec_result: StartExecResults = self
-            .docker
+        let exec_result: StartExecResults = docker
             .start_exec(exec.id.as_str(), None)
             .await
             .map_err(ContainerExecError)?;
-        let docker = self.docker.clone();
+        let docker = self.docker()?;
 
         // Check asyncly for the status of the exec task
         let exec_handle = task::spawn(async move {
@@ -151,10 +162,20 @@ impl ContainerOperations for Container {
     }
 
     async fn remove(&self) -> Result<(), Error> {
-        self.docker
+        self.docker()?
             .remove_container(&self.id, None)
             .await
             .map_err(ContainerRemoveError)?;
         Ok(())
+    }
+}
+
+impl Default for Container {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            config: Config::default(),
+            docker: None,
+        }
     }
 }

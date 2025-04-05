@@ -36,6 +36,16 @@ impl Pipe for OutputPipe {
     }
 }
 
+impl Default for OutputPipe {
+    fn default() -> Self {
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel();
+        Self {
+            action_id: 0,
+            pipe: tx,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

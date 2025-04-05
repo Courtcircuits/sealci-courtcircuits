@@ -6,5 +6,5 @@ pub mod proto {
     tonic::include_proto!("actions");
 }
 pub mod app;
-pub mod config;
 pub mod brokers;
+pub mod config;

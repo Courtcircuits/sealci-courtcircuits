@@ -74,7 +74,9 @@ impl SchedulerService {
             .report_health_status(stream)
             .await
             .map_err(Error::ReportHealthError)?;
-        handle_health_stream.await.map_err(|_|Error::HealthStreamError)?;
+        handle_health_stream
+            .await
+            .map_err(|_| Error::HealthStreamError)?;
         error!("Health ended");
         Ok(())
     }

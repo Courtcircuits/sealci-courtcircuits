@@ -10,6 +10,7 @@ use tonic::transport::Server;
 use tracing::info;
 
 use crate::{
+    brokers::state_broker::StateBroker,
     config::Config,
     models::error::Error,
     proto::action_service_server::ActionServiceServer,
@@ -34,7 +35,9 @@ impl App {
 
         let docker = Arc::new(Docker::connect_with_socket_defaults().unwrap());
         docker.ping().await.map_err(Error::DockerConnectionError)?;
-        let action_service = ActionService::new(docker);
+
+        let state_broker = Arc::new(StateBroker::new());
+        let action_service = ActionService::new(docker, state_broker.clone());
         let actions = ActionsLauncher { action_service };
         let action_service_grpc = ActionServiceServer::new(actions);
         let mut scheduler_service = SchedulerService::init(

@@ -5,6 +5,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
 
 use crate::{
+    brokers::{action_broker::ActionBroker, state_broker::StateBroker, Broker},
     models::{
         action::Action,
         container::{Container, ContainerOperations},
@@ -16,14 +17,19 @@ use crate::{
 pub struct ActionService {
     docker_client: Arc<Docker>,
     actions: HashMap<u32, Action<Container>>,
+    pub action_broker: ActionBroker,
+    pub state_broker: Arc<StateBroker>,
 }
 
 impl ActionService {
-    pub fn new(docker_client: Arc<Docker>) -> Self {
+    pub fn new(docker_client: Arc<Docker>, state_broker: Arc<StateBroker>) -> Self {
         let actions = HashMap::new();
+        let action_broker = ActionBroker::new();
         Self {
             docker_client,
             actions,
+            action_broker,
+            state_broker,
         }
     }
 
@@ -37,8 +43,18 @@ impl ActionService {
     ) -> Result<Action<Container>, Error> {
         let container = Container::new(image, self.docker_client.clone());
         container.start().await?;
-        let action = Action::new(action_id, container, commands, log_input, repo_url);
+        let action = Action::new(
+            action_id,
+            container,
+            commands,
+            log_input,
+            repo_url,
+            self.state_broker.clone(),
+        );
         action.setup_repository().await?;
+        self.action_broker
+            .create_action_channel
+            .send_event(action.clone())?;
         Ok(action)
     }
 
@@ -48,6 +64,9 @@ impl ActionService {
             .remove(&action_id)
             .ok_or(Error::ActionNotFound)?;
         action.cleanup().await?;
+        self.action_broker
+            .delete_action_channel
+            .send_event(action_id)?;
         Ok(())
     }
 

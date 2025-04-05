@@ -3,14 +3,16 @@ use super::{
     error::Error::{self, StepOutputError},
     output_pipe::OutputPipe,
 };
+use crate::brokers::state_broker::{StateBroker, StateEvent};
+use crate::brokers::Broker;
 use crate::{models::output_pipe::Pipe, proto::ActionResponseStream};
-use state::{ActionState, State};
+use state::State;
 use std::sync::Arc;
 use tokio::{sync::mpsc::UnboundedSender, task};
 use tokio_stream::StreamExt;
 use tonic::Status;
 use tracing::{debug, error};
-mod state;
+pub mod state;
 
 #[derive(Clone)]
 pub struct Action<T: ContainerOperations> {
@@ -19,7 +21,8 @@ pub struct Action<T: ContainerOperations> {
     steps: Vec<Step<T>>,
     pipe: Arc<OutputPipe>,
     pub repository_url: String,
-    pub state: ActionState,
+    pub state: State,
+    pub state_broker: Arc<StateBroker>,
 }
 
 impl<T: ContainerOperations> Action<T> {
@@ -29,6 +32,7 @@ impl<T: ContainerOperations> Action<T> {
         commands: Vec<String>,
         stdout: UnboundedSender<Result<ActionResponseStream, Status>>,
         repository_url: String,
+        state_broker: Arc<StateBroker>,
     ) -> Self {
         let pipe = Arc::new(OutputPipe::new(id, stdout));
         let container = Arc::new(container);
@@ -36,8 +40,7 @@ impl<T: ContainerOperations> Action<T> {
             .iter()
             .map(|c| Step::new(c.into(), Some(format!("/{}", id)), container.clone()))
             .collect();
-        let state = ActionState::new();
-
+        let state = State::InProgress;
         Self {
             id,
             container,
@@ -45,6 +48,7 @@ impl<T: ContainerOperations> Action<T> {
             repository_url,
             pipe,
             state,
+            state_broker,
         }
     }
 
@@ -78,7 +82,7 @@ impl<T: ContainerOperations> Action<T> {
             if let Ok(exit_code) = exit_status {
                 if exit_code != 0 {
                     self.cleanup().await?;
-                    self.state.set(State::Completed)?;
+                    self.set_state(State::Completed);
                     self.pipe
                         .output_log("Action failed".to_string(), 3, Some(exit_code));
                     return Err(StepOutputError(exit_code));
@@ -86,7 +90,7 @@ impl<T: ContainerOperations> Action<T> {
             }
         }
         self.cleanup().await?;
-        self.state.set(State::Completed)?;
+        self.set_state(State::Completed);
         Ok(())
     }
 
@@ -101,6 +105,14 @@ impl<T: ContainerOperations> Action<T> {
     pub async fn cleanup(&self) -> Result<(), Error> {
         self.container.remove().await
     }
+
+    fn set_state(&mut self, state: State) {
+        self.state = state.clone();
+        self.state_broker.state_channel.send_event(StateEvent {
+            state: state.clone(),
+            action_id: self.id,
+        });
+    }
 }
 
 #[cfg(test)]
@@ -112,6 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_action_setup_repository_calls_exec_with_git_clone() {
+        let state_broker = Arc::new(StateBroker::new());
         // Arrange
         let (tx, _rx) = mpsc::unbounded_channel();
         let mock_container = MockContainer {
@@ -127,6 +140,7 @@ mod tests {
             vec!["echo 'test'".to_string()],
             tx,
             repo_url.clone(),
+            state_broker,
         );
 
         // Act
@@ -147,6 +161,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_action_execute_runs_all_steps() {
+        let state_broker = Arc::new(StateBroker::new());
+
         // Arrange
         let (tx, _rx) = mpsc::unbounded_channel();
         let mock_container = MockContainer {
@@ -166,6 +182,7 @@ mod tests {
             commands.clone(),
             tx,
             "https://example.com/repo.git".to_string(),
+            state_broker,
         );
 
         // Act
@@ -202,6 +219,7 @@ mod tests {
             vec!["echo 'will fail'".to_string()],
             tx,
             "https://example.com/repo.git".to_string(),
+            Arc::new(StateBroker::new()),
         );
 
         // Act
@@ -230,6 +248,7 @@ mod tests {
             vec![],
             tx,
             "https://example.com/repo.git".to_string(),
+            Arc::new(StateBroker::new()),
         );
 
         // Act
@@ -259,6 +278,7 @@ mod tests {
             commands.clone(),
             tx,
             repo_url.clone(),
+            Arc::new(StateBroker::new()),
         );
 
         // Assert

@@ -1,6 +1,6 @@
 use clap::Parser;
 
-#[derive(Parser,Clone)]
+#[derive(Parser, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Config {
     /// The host URL of the scheduler
