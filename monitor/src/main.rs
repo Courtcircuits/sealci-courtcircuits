@@ -76,7 +76,7 @@ async fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
                 .short('e')
                 .long("event")
                 .required(false)
-                .help("The event to listen to (commit, pull_request, *)"),
+                .help("The event to listen to (commit, pull_request, release, *)"),
         )
         .arg(
             Arg::new("repo_owner")

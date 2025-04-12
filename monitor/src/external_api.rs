@@ -229,7 +229,7 @@ pub(crate) fn validate_event(event: &str) -> Result<(), Error> {
         Ok(())
     } else {
         Err(actix_web::error::ErrorBadRequest(format!(
-            "{}: {} - valid events are: commit, pull_request, *",
+            "{}: {} - valid events are: commit, pull_request, release, *",
             INVALID_EVENT_ERROR, event
         )))
     }
