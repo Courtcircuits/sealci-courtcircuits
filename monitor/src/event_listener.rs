@@ -10,7 +10,6 @@ use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
 
-
 pub fn get_github_api_url(repo_owner: &str, repo_name: &str) -> String {
     format!("https://api.github.com/repos/{}/{}", repo_owner, repo_name)
 }
@@ -56,74 +55,22 @@ async fn get_latest_commit(config: &SingleConfig) -> Result<String, Box<dyn Erro
     Ok(last_commit_sha)
 }
 
-// async fn get_latest_pull_request(config: &SingleConfig) -> Result<u64, Box<dyn Error>> {
-//     let url = format!(
-//         "{}/pulls",
-//         get_github_api_url(&config.repo_owner, &config.repo_name)
-//     );
-//     let pull_requests = request_github_api(&url, &config.github_token).await?;
-//     let latest_pr = match pull_requests.get(0) {
-//         Some(pr) => pr["id"].as_u64(),
-//         None => return Err("No pull requests found".into()),
-//     };
-//     let last_pr_id = match latest_pr {
-//         Some(pr) => pr,
-//         None => return Err("Id of latest pull request not found".into()),
-//     };
-//     Ok(last_pr_id)
-// }
-
-pub async fn listen_to_commits(
-    config: &SingleConfig,
-    callback: impl Fn() + Send + 'static,
-) -> Result<(), Box<dyn Error>> {
-    // Get the latest commit and unwrap the result properly
-    let mut last_commit = get_latest_commit(config).await?;
-    info!("Last commit found: {}", last_commit);
-
-    loop {
-        sleep(Duration::from_secs(10)).await; // Wait 10 seconds before checking again
-        info!("{}/{} - Checking for new commits...", config.repo_owner, config.repo_name);
-
-        // Handle the Result from `get_latest_commit`
-        match get_latest_commit(config).await {
-            Ok(current_commit) => {
-                // Compare the latest commit with the current one
-                if last_commit != current_commit {
-                    info!("{}/{} - New commit found: {}", config.repo_owner, config.repo_name, current_commit);
-                    last_commit = current_commit;
-                    callback();
-                }
-            }
-            Err(e) => {
-                // Handle errors (such as network issues or API problems)
-                error!("Error fetching the latest commit: {}", e);
-            }
-        }
-    }
+async fn get_latest_tag(config: &SingleConfig) -> Result<String, Box<dyn Error>> {
+    let url = format!(
+        "{}/tags",
+        get_github_api_url(&config.repo_owner, &config.repo_name)
+    );
+    let tags = request_github_api(&url, &config.github_token).await?;
+    let latest_tag = match tags.get(0) {
+        Some(tag) => tag["name"].as_str().map(String::from),
+        None => return Err("No tags found".into()),
+    };
+    let last_tag_name = match latest_tag {
+        Some(tag) => tag,
+        None => return Err("Name of latest tag not found".into()),
+    };
+    Ok(last_tag_name)
 }
-
-// async fn get_pull_request_details(
-//     config: &SingleConfig,
-//     pr_number: u64,
-// ) -> Result<Value, Box<dyn Error>> {
-//     let url = format!(
-//         "{}/pulls/{}",
-//         get_github_api_url(&config.repo_owner, &config.repo_name),
-//         pr_number
-//     );
-//     let pull_request = request_github_api(&url, &config.github_token).await?;
-//     Ok(pull_request)
-// }
-
-// async fn get_open_pull_requests(config: &SingleConfig) -> Result<Vec<Value>, Box<dyn Error>> {
-//     let url = format!(
-//         "{}/pulls?state=open",
-//         get_github_api_url(&config.repo_owner, &config.repo_name)
-//     );
-//     let pull_requests = request_github_api(&url, &config.github_token).await?;
-//     Ok(pull_requests.as_array().unwrap().to_vec())
-// }
 
 async fn get_latest_pull_request(config: &SingleConfig) -> Option<(u64, String)> {
     let url = format!("{}/pulls", get_github_api_url(&config.repo_owner, &config.repo_name));
@@ -142,6 +89,57 @@ async fn get_latest_pull_request(config: &SingleConfig) -> Option<(u64, String)>
     Some((pull_request_id, pull_request_title))
 }
 
+pub async fn listen_to_commits(
+    config: &SingleConfig,
+    callback: impl Fn() + Send + 'static,
+) -> Result<(), Box<dyn Error>> {
+    let mut last_commit = get_latest_commit(config).await?;
+    info!("Last commit found: {}", last_commit);
+
+    loop {
+        sleep(Duration::from_secs(10)).await;
+        info!("{}/{} - Checking for new commits...", config.repo_owner, config.repo_name);
+
+        match get_latest_commit(config).await {
+            Ok(current_commit) => {
+                if last_commit != current_commit {
+                    info!("{}/{} - New commit found: {}", config.repo_owner, config.repo_name, current_commit);
+                    last_commit = current_commit;
+                    callback();
+                }
+            }
+            Err(e) => {
+                error!("Error fetching the latest commit: {}", e);
+            }
+        }
+    }
+}
+
+pub async fn listen_to_tags(
+    config: &SingleConfig,
+    callback: impl Fn() + Send + 'static,
+) -> Result<(), Box<dyn Error>> {
+    let mut last_tag = get_latest_tag(config).await?;
+    info!("Last tag found: {}", last_tag);
+
+    loop {
+        sleep(Duration::from_secs(10)).await;
+        info!("{}/{} - Checking for new tags...", config.repo_owner, config.repo_name);
+
+        match get_latest_tag(config).await {
+            Ok(current_tag) => {
+                if last_tag != current_tag {
+                    info!("{}/{} - New tag found: {}", config.repo_owner, config.repo_name, current_tag);
+                    last_tag = current_tag;
+                    callback();
+                }
+            }
+            Err(e) => {
+                error!("Error fetching the latest tag: {}", e);
+            }
+        }
+    }
+}
 
 pub async fn listen_to_pull_requests(
     config: &SingleConfig,
@@ -153,10 +151,10 @@ pub async fn listen_to_pull_requests(
     }
 
     loop {
-        sleep(Duration::from_secs(10)).await; // Wait 10 seconds before checking again
+        sleep(Duration::from_secs(10)).await;
         info!("{}/{} - Checking for new pull requests...", config.repo_owner, config.repo_name);
         if let Some((current_pull_request, current_title)) = get_latest_pull_request(config).await {
-            if Some(&(current_pull_request, current_title.clone())) != last_pull_request.as_ref() { // If there is a new pull request
+            if Some(&(current_pull_request, current_title.clone())) != last_pull_request.as_ref() {
                 info!("{}/{} - New pull request found: {} - {}", config.repo_owner, config.repo_name, current_pull_request, current_title);
                 last_pull_request = Some((current_pull_request, current_title));
                 callback();
@@ -164,6 +162,7 @@ pub async fn listen_to_pull_requests(
         }
     }
 }
+
 pub fn create_commit_listener(
     config: Arc<SingleConfig>,
     repo_url: String,
@@ -194,6 +193,23 @@ pub fn create_pull_request_listener(
                 Arc::clone(&controller_endpoint),
             );
             let _ = listen_to_pull_requests(&config, callback).await;
+        }
+    }
+}
+
+pub fn create_tag_listener(
+    config: Arc<SingleConfig>,
+    repo_url: String,
+    controller_endpoint: Arc<String>,
+) -> impl Future<Output = ()> {
+    async move {
+        if config.event == "release" || config.event == "*" {
+            let callback = create_callback(
+                Arc::clone(&config),
+                repo_url.clone(),
+                Arc::clone(&controller_endpoint),
+            );
+            let _ = listen_to_tags(&config, callback).await;
         }
     }
 }

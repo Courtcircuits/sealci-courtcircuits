@@ -1,6 +1,6 @@
 use crate::config::{Config, SingleConfig};
 use crate::event_listener::{
-    create_commit_listener, create_pull_request_listener, get_github_repo_url,
+    create_commit_listener, create_pull_request_listener, get_github_repo_url, create_tag_listener
 };
 use actix_web::web::Data;
 use std::env;
@@ -52,8 +52,16 @@ pub async fn create_thread(config: &SingleConfig, thread_list: &mut JoinSet<()>)
     if config.event == "pull_request" || config.event == "*" {
         thread_list.spawn(create_pull_request_listener(
             Arc::new(config.clone()),
-            repo_url,
-            Arc::new(controller_endpoint),
+            repo_url.clone(),
+            Arc::new(controller_endpoint.clone()),
+        ));
+    }
+
+    if config.event == "release" || config.event == "*" {
+        thread_list.spawn(create_tag_listener(
+            Arc::new(config.clone()),
+            repo_url.clone(),
+            Arc::new(controller_endpoint.clone()),
         ));
     }
 }
