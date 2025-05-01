@@ -4,10 +4,13 @@
 
 ## Table of Contents
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Usage](#usage)
-- [API Endpoints](#api-endpoints)
+- [Github Monitor](#github-monitor)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Prerequisites](#prerequisites)
+  - [Usage](#usage)
+  - [API Endpoints](#api-endpoints)
+  - [Example Workflow](#example-workflow)
 
 ## Features
 
@@ -41,7 +44,7 @@
 Or, with a config file, you can take example on the one that already exist
 
 ```bash
-    run -- --config "./../configs/config.yaml"
+    cargo run -- --config "./../configs/config.yaml"
 ```
 
 ## API Endpoints
