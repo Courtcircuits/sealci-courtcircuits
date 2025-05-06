@@ -31,22 +31,23 @@ sequenceDiagram
 
 ## Keys Management
 
-The keys are stored in the VM Memory
+We chose to sign the releases with a PGP key to keep our plateform simple and as decentralized as possible. People using SealCI must thus be trustful of the release agent.
 
-## API
+When the release agent is created it already contains a PGP key pair set by default. The key pair is provided at the generation of the initramfs when we are in a production environment. In a development environment, the key pair is generated on the fly.
 
-Here are all the gRPC interfaces
-```protobuf
-syntax = "proto3";
+There should be at least two interactions between the release agent and the controller when it comes to key management.
+- **GetPublicKey** : The controller asks the release agent for the public key so the user can verify the signature of the release.
+- **RollPGPKeys** : The controller asks the release agent to roll the PGP keys used to sign the releases because the keys should be rotated regularly and a PGP key can be compromise. In that scenario, the release agent should also issue a key denial certificate so users are aware of the compromise.
 
-package releaseagent;
+```mermaid
+sequenceDiagram
+    participant Controller
+    participant ReleaseAgent
 
-message ReleaseRequest {
-    string url = 1;
-    string tag = 2;
-}
+    Controller->>ReleaseAgent: GetPublickKey
+    ReleaseAgent->>Controller: PGP Public Key
 
-message ReleaseResponse {
-    bytes release = 1;
-}
+    Controller->>ReleaseAgent: RollPGPKeys
+    ReleaseAgent->>ReleaseAgent: Deny current key pair and generate new key pair
+    ReleaseAgent->>Controller: PGP Public Key
 ```
