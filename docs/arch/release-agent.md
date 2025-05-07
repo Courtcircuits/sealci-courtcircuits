@@ -2,14 +2,14 @@
 
 ## Glossary
 
-- **release** : A release is an archive ".git.tgz.sig" containing the source code of a project and its signature. The release is signed by the release agent using a private certificates. The public key is used to verify the signature.
+- **release** : A release is an archive ".git.tgz.sig" containing the source code of a project and its signature. The release is signed by the release agent using a private key. The public key is used to verify the signature. These keys make a pair of PGP keys.
 - **release agent** : The release agent is a component that is responsible for creating and signing releases.
 
 
 ## Description
 
 The release agent is a component that is responsible for creating and signing releases for any project. The release agent is designed to be used in a CI/CD pipeline.
-When a watched repository contains a new tag, the controller triggers the release agent to create a release for the repository. Of course, the release agent is totally independent from the2
+When a watched repository contains a new tag, the controller triggers the release agent to create a release for the repository. Of course, the release agent is totally independent from the other services in seal ci's infrastructure.
 
 ## External Communication
 

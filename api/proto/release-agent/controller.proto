@@ -1,3 +1,9 @@
+syntax = "proto3";
+
+package sealci.releaseagent;
+
+import "google/protobuf/empty.proto";
+
 message CreateReleaseRequest {
     string repo_url =1;
     string revision = 2;
@@ -22,12 +28,9 @@ message RollPGPKeysRequest {
     string algorithm = 1;
 }
 
-message GetPublicKeyRequest {
-    string key_id = 1;
-}
 
 service Controller {
     rpc CreateRelease(CreateReleaseRequest) returns (CreateReleaseResponse);
     rpc RollPGPKeys (RollPGPKeysRequest) returns (PublicKey);
-    rpc GetPublicKey(GetPublicKeyRequest) returns (PublicKey);
+    rpc GetPublicKey(google.protobuf.Empty) returns (PublicKey);
 }
