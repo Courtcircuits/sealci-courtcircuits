@@ -31,18 +31,3 @@ service ReleaseAgent {
   rpc RollPGPKeys(RollPGPKeysRequest) returns (PublicKey);
   rpc GetPublicKey(Empty) returns (PublicKey);
 }
-
-// The greeter service definition.
-message Shirt {
-  // Label sizes
-  enum Size {
-    SMALL = 0;
-    MEDIUM = 1;
-    LARGE = 2;
-  }
-
-  // The base color
-  string color = 1;
-  // The size as stated on the label
-  Size size = 2;
-}
