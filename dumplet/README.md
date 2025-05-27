@@ -1,5 +1,5 @@
 # **Dumplet 🐳 → 📁**
-🔹 **Dumplet** is a Rust crate that extracts the filesystem of a **Docker image** and saves it as a `.tar` archive.  
+🔹 **Dumplet** is a Rust **crate** and **CLI tool** that extracts the filesystem of a **Docker image** and saves it as a `.tar` archive.  
 🔹 It uses the **Bollard** crate to interact with the Docker API.
 
 ---
@@ -8,7 +8,8 @@
 ✅ Pulls a **Docker image** (always forced for now).  
 ✅ Creates a **temporary container** _(without running it)_.  
 ✅ Exports the **container’s filesystem** as a `.tar` archive.  
-✅ **Automatically removes** the container after extraction.
+✅ **Automatically removes** the container after extraction.  
+✅ Can be used as a **Rust library** or as a **CLI**.
 
 ---
 
@@ -18,17 +19,33 @@
     - Install Docker: [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
 - Rust & Cargo installed: [https://rustup.rs/](https://rustup.rs/)
 
-### **Add Dumplet to your Rust project**
-Dumplet is a local crate for now. Add it to your `Cargo.toml`:
+### **As a CLI Tool (Recommended if you just want to export images)**
+1. Clone the repository:
+    ```sh
+    git clone https://github.com/dev-sys-do/sealci
+    cd sealci/dumplet
+    ```
+2. Build the binary:
+    ```sh
+    cargo build --release
+    ```
+3. Use it:
+    ```sh
+    ./target/release/dumplet <IMAGE_NAME> <OUTPUT_PATH>
+    ```
+   **Example:**
+    ```sh
+    ./target/release/dumplet ubuntu:latest ./tmp/ubuntu_fs.tar
+    ```
+
+### **As a Rust Library**
+If you want to use Dumplet’s logic in your own Rust project, add it to your `Cargo.toml`:
 ```toml
 [dependencies]
 dumplet = { path = "../dumplet" }
-``` 
+```
 
----
-
-## **🚀 Usage**
-### **Basic Example**
+Example usage in your Rust code:
 ```rust
 use dumplet::export_docker_image;
 
@@ -56,8 +73,8 @@ tar -xf /tmp/ubuntu_fs.tar -C /your/destination
 Want to contribute? Feel free to **open an issue or a pull request**!  
 To run the project locally:
 ```sh
-git clone https://github.com/yourusername/dumplet.git
-cd dumplet
+git clone https://github.com/dev-sys-do/sealci
+cd sealci/dumplet
 cargo build
 cargo test
 ```
